@@ -4,83 +4,123 @@ import matplotlib.pyplot as plt
 from scipy.stats import linregress
 import math as mt
 
-path='data/'
-dict_immat={}
+path = 'data/'
+dict_immat = {}
 for i in range(10):
-    dict_immat['data_immat_'+str(i)]=pd.read_csv(path+'data_immat_traitees_'+str(i)+'.csv',sep=';')
+    dict_immat['data_immat_'+str(i)] = pd.read_csv(
+        path+'data_immat_traitees_'+str(i)+'.csv', sep=';', low_memory=False)
 
-data_immat=pd.concat(dict_immat,ignore_index=True)
-data_communes=pd.read_csv(path+'RGC_2013.csv',sep=';')
-data_bornes=pd.read_csv(path+'data_bornes_traitees.csv',sep=';')
+data_immat = pd.concat(dict_immat, ignore_index=True)
+data_communes = pd.read_csv(path+'RGC_2013.csv', sep=';', low_memory=False)
+data_bornes = pd.read_csv(
+    path+'data_bornes_traitees.csv', sep=';', low_memory=False)
 
-data_communes['DEP']=data_communes['DEP'].astype(str)
-data_communes['COM']=data_communes['COM'].astype(str)
-data_communes['COG']=data_communes['DEP']+data_communes['COM'].str.zfill(3)
-data_immat['code commune']=data_immat['code commune'].astype(str)
-data_bornes['code_insee_commune']=data_bornes['code_insee_commune'].astype(str)
-data_bornes['dep_b']=data_bornes['dep_b'].astype(int).astype(str)
-data_immat['dptmt']=data_immat['dptmt'].astype(str)
+data_communes['DEP'] = data_communes['DEP'].astype(str)
+data_communes['COM'] = data_communes['COM'].astype(str)
+data_communes['COG'] = data_communes['DEP']+data_communes['COM'].str.zfill(3)
+data_immat['code commune'] = data_immat['code commune'].astype(str)
+data_bornes['code_insee_commune'] = data_bornes['code_insee_commune'].astype(
+    str)
+data_bornes['dep_b'] = data_bornes['dep_b'].astype(int).astype(str)
+data_immat['dptmt'] = data_immat['dptmt'].astype(str)
+
 
 def calcul_ratio(list_dep):
-    data_voiture_electrique = data_immat[data_immat['energie']=='Electrique et hydrogene']
-    data_voiture_electrique = data_voiture_electrique[data_voiture_electrique['dptmt'].isin(list_dep)]
-    #faire la somme de la collone nbImmat
-    data_voiture_electrique = data_voiture_electrique.groupby(['dptmt']).sum()
+    data_voiture_electrique = data_immat[data_immat['energie']
+                                         == 'Electrique et hydrogene']
+    data_voiture_electrique = data_voiture_electrique[data_voiture_electrique['dptmt'].isin(
+        list_dep)]
+    data_voiture_electrique = data_voiture_electrique.groupby(
+        ['dptmt']).sum(numeric_only=True)
     data_voiture_electrique = data_voiture_electrique['Nb_immat']
-    #Faire un ratio entre le nombre de voirure electrique et le nombre de bornes de recharges
     data_bornes_dep = data_bornes[data_bornes['dep_b'].isin(list_dep)]
-    data_bornes_dep = data_bornes_dep[["dep_b"]]    
-    print(data_bornes_dep[["dep_b"]]    )
-    #Ajouter une colonne qui compte le nombre de lignes en fonction du departement
-    data_bornes_dep = data_bornes_dep.groupby(['dep_b']).sum()
-    data_bornes_dep = data_bornes_dep.rename(columns={'dep_b':'nb_bornes'})
+    data_bornes_dep = data_bornes_dep.groupby(['dep_b']).sum(numeric_only=True)
 
+    data_bornes_dep = data_bornes_dep['Nombre points de charge']
 
-
-    print(data_bornes_dep)
-    
     ratio = data_voiture_electrique/data_bornes_dep
 
-    print(ratio)
-    return #serie des ratios demandés
-calcul_ratio(['44','72','85','53'])
+    return ratio
+
+
+calcul_ratio(['44', '49', '72', '85', '53'])
+
+
 def repart_energie(annee):
-    return #serie demandée
+    # Sélectionner les données pour l'année donnée en paramètre
+    immatriculations_annee = data_immat[data_immat['Annee'] == annee]
+    # Regrouper les données par type de carburant et calculer le nombre total d'immatriculations pour chaque type de carburant
+    repartition_energie = immatriculations_annee.groupby(['energie']).sum(numeric_only=True)
+    repartition_energie  = repartition_energie['Nb_immat']
+    return repartition_energie
+
 
 def repart_ratio():
-    return #serie_ratio_communes,serie_ratio_par_statuts_admi
+    
+    # Joindre les données des immatriculations avec les données des communes en utilisant le code INSEE
+    data_communes["CODGEO"] = data_communes["DEP"].astype(str).str.zfill(2) + data_communes["COM"].astype(str).str.zfill(3) 
+    print(data_communes["CODGEO"])
+    immatriculations_communes = pd.merge(data_immat, data_communes, left_on='code commune', right_on='CODGEO', how='inner')
+    # Retirer les communes dont la population est renseignée comme étant égale à 0
+    immatriculations_communes = immatriculations_communes[immatriculations_communes['POPU'] != 0]
+    
+    # Calculer le nombre d'immatriculations par centaine d'habitants pour chaque commune sur 10 ans
+    ratios_communes = (immatriculations_communes.groupby('code commune').size() / immatriculations_communes.groupby('code commune')['POPU'].first() * 100).groupby('code commune').sum() / 10
+    print(1)
+    # Proratiser les ratios pour ramener le nombre d'immatriculations à une période de 10 ans
+    nb_annees = len(data_immat['Annee'].unique())
+    ratios_communes = ratios_communes * (10 / nb_annees)
+
+    print(2)
+    # Restreindre l'étude aux communes ayant un ratio inférieur ou égal à 100
+    ratios_communes = ratios_communes[ratios_communes <= 100]
+    print(ratios_communes)
+    # Calculer le ratio moyen pour chaque statut administratif
+    ratios_statut_administratif = ratios_communes.groupby('NOM').mean()
+    
+    return ratios_communes, ratios_statut_administratif
+
 
 def get_tx_elec():
-    return #serie_tx
+    return  # serie_tx
 
-def mod_log_evol_tx_elec(tx_sat,x_mod_log,serie_tx_elec):
-    return #vecteur_mod_log
 
-def mod_log_rec(u0,n,k,a):
-    return #liste_valeurs
+def mod_log_evol_tx_elec(tx_sat, x_mod_log, serie_tx_elec):
+    return  # vecteur_mod_log
 
-def BaseLagrange(x,listX,i):
-    return #une valeur
 
-def InterLagrange(x,listX,listY):
-    return #une valeur
+def mod_log_rec(u0, n, k, a):
+    return  # liste_valeurs
 
-def dicho(a,b,f,e):
-    return #liste_valeurs
 
-def fausse_pos(a,b,f,e):
-    return #liste_valeurs
-    
-###QUELQUES TESTS INDICATIFS
-#test_calcul_ratio=calcul_ratio(['44','72','85','53'])
-#print('test calcul_ratio : ',np.isclose(test_calcul_ratio.sum(),20.83005552505825) and np.isclose(test_calcul_ratio.loc['72'],5.063337393422655))
+def BaseLagrange(x, listX, i):
+    return  # une valeur
 
-# test_repart_energie=repart_energie(2017)
-# print('test_repart_energie : ',test_repart_energie.loc['Diesel - thermique']==1013098)
 
-# serie_ratio_com,serie_ratio_admi=repart_ratio()
-# print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
-# print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
+def InterLagrange(x, listX, listY):
+    return  # une valeur
+
+
+def dicho(a, b, f, e):
+    return  # liste_valeurs
+
+
+def fausse_pos(a, b, f, e):
+    return  # liste_valeurs
+
+
+# QUELQUES TESTS INDICATIFS
+# test_calcul_ratio = calcul_ratio(['44', '72', '85', '53'])
+# print('test calcul_ratio : ', np.isclose(test_calcul_ratio.sum(), 20.83005552505825)
+#       and np.isclose(test_calcul_ratio.loc['72'], 5.063337393422655))
+
+# test_repart_energie = repart_energie(2017)
+# print('test_repart_energie : ',
+#       test_repart_energie.loc['Diesel - thermique'] == 1013098)
+
+serie_ratio_com,serie_ratio_admi=repart_ratio()
+print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
+print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
 
 # serie_tx_elec=get_tx_elec()
 # print('test_get_tx_elec : ',np.isclose(serie_tx_elec.mean(),0.028857941346249236) and np.isclose(serie_tx_elec.loc[2020],0.0665604078072506))
@@ -110,16 +150,22 @@ def fausse_pos(a,b,f,e):
 # list_res_fausse_pos1=[1.3333333333333333, 1.4, 1.411764705882353, 1.4137931034482758, 1.414141414141414, 1.4142011834319526, 1.41421143847487]
 # print('test fausse_pos : ',list(np.isclose(np.array(fausse_pos(1,2,lambda x:x**2-2,10**(-5))),np.array(list_res_fausse_pos1))).count(True)==len(list_res_fausse_pos1))
 
-def test_remarque(annee_debut,annee_fin,tx_sat,serie_tx_elec,e,tx_recherche):
-    N=annee_fin-annee_debut+1
-    absc_interp_cheb=np.array((0.5*(annee_debut+annee_fin))*np.ones(N))+(0.5*(annee_fin-annee_debut))*np.cos(np.array([mt.pi*(2*k-1)/(2*N) for k in range(1, N+1)]))
-    listY,a=mod_log_evol_tx_elec(tx_sat,absc_interp_cheb,serie_tx_elec)
-    annee_debut_serie=serie_tx_elec.index.values.min()
-    res_mod_log_rec=mod_log_rec(serie_tx_elec.loc[annee_debut_serie],annee_fin-annee_debut,tx_sat,a)
-    print('test_remarque mod_log_rec : ',annee_debut_serie+[el<tx_recherche for el in res_mod_log_rec].count(True))
-    print('test_remarque_dicho : ',dicho(annee_debut,annee_fin,lambda x:InterLagrange(x,absc_interp_cheb,listY)-tx_recherche,e))
-    print('test_remarque_fausse_pos : ',fausse_pos(annee_debut,annee_fin,lambda x:InterLagrange(x,absc_interp_cheb,listY)-tx_recherche,e))
-    
+
+def test_remarque(annee_debut, annee_fin, tx_sat, serie_tx_elec, e, tx_recherche):
+    N = annee_fin-annee_debut+1
+    absc_interp_cheb = np.array((0.5*(annee_debut+annee_fin))*np.ones(N))+(0.5*(
+        annee_fin-annee_debut))*np.cos(np.array([mt.pi*(2*k-1)/(2*N) for k in range(1, N+1)]))
+    listY, a = mod_log_evol_tx_elec(tx_sat, absc_interp_cheb, serie_tx_elec)
+    annee_debut_serie = serie_tx_elec.index.values.min()
+    res_mod_log_rec = mod_log_rec(
+        serie_tx_elec.loc[annee_debut_serie], annee_fin-annee_debut, tx_sat, a)
+    print('test_remarque mod_log_rec : ', annee_debut_serie +
+          [el < tx_recherche for el in res_mod_log_rec].count(True))
+    print('test_remarque_dicho : ', dicho(annee_debut, annee_fin,
+          lambda x: InterLagrange(x, absc_interp_cheb, listY)-tx_recherche, e))
+    print('test_remarque_fausse_pos : ', fausse_pos(annee_debut, annee_fin,
+          lambda x: InterLagrange(x, absc_interp_cheb, listY)-tx_recherche, e))
+
 # test_remarque(2010,2050,0.8,get_tx_elec().loc[2011:2022],10**(-3),0.5) #doit afficher :
 # test_remarque mod_log_rec :  2029
 # test_remarque_dicho :  [2030.0, 2020.0, 2025.0, 2027.5, 2028.75, 2028.125]
