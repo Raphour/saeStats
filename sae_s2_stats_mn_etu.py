@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import linregress
+from scipy.stats import zipf, linregress
 import math as mt
 
 path = 'data/'
@@ -55,30 +55,35 @@ def repart_energie(annee):
     return repartition_energie
 
 
-def repart_ratio():
-    
-    # Joindre les données des immatriculations avec les données des communes en utilisant le code INSEE
-    data_communes["CODGEO"] = data_communes["DEP"].astype(str).str.zfill(2) + data_communes["COM"].astype(str).str.zfill(3) 
-    print(data_communes["CODGEO"])
-    immatriculations_communes = pd.merge(data_immat, data_communes, left_on='code commune', right_on='CODGEO', how='inner')
-    # Retirer les communes dont la population est renseignée comme étant égale à 0
-    immatriculations_communes = immatriculations_communes[immatriculations_communes['POPU'] != 0]
-    
-    # Calculer le nombre d'immatriculations par centaine d'habitants pour chaque commune sur 10 ans
-    ratios_communes = (immatriculations_communes.groupby('code commune').size() / immatriculations_communes.groupby('code commune')['POPU'].first() * 100).groupby('code commune').sum() / 10
-    print(1)
-    # Proratiser les ratios pour ramener le nombre d'immatriculations à une période de 10 ans
-    nb_annees = len(data_immat['Annee'].unique())
-    ratios_communes = ratios_communes * (10 / nb_annees)
 
-    print(2)
-    # Restreindre l'étude aux communes ayant un ratio inférieur ou égal à 100
-    ratios_communes = ratios_communes[ratios_communes <= 100]
-    print(ratios_communes)
-    # Calculer le ratio moyen pour chaque statut administratif
-    ratios_statut_administratif = ratios_communes.groupby('NOM').mean()
-    
-    return ratios_communes, ratios_statut_administratif
+
+
+def repart_ratio(data_communes, data_immat):
+    # Somme des immatriculations par commune
+    immat_by_commune = data_immat.groupby('code commune')['Nb_immat'].sum()
+    # Ajouter la colonne 'code commune' basée sur la concaténation des colonnes 'DEP' et 'COM' dans data_communes
+    data_communes['code commune'] = data_communes['DEP'] + data_communes['COM'].str.zfill(3)
+    # Fusionner avec data_communes pour obtenir la population et le statut administratif
+    data_merged = data_communes.merge(immat_by_commune, on='code commune')
+    # Calculer le ratio du nombre d'immatriculations par centaine d'habitants sur 10 ans pour chaque commune
+    data_merged['ratio'] = (data_merged['Nb_immat'] / (data_merged['POPU'])) * (10 / 13) # 10 ans sur une période de 12 ans
+    # Exclure les communes ayant une population égale à zéro
+    data_merged = data_merged[data_merged['POPU'] != 0]
+    # Restriction aux communes ayant un ratio inférieur ou égal à 100
+    data_merged = data_merged[data_merged['ratio'] <= 100]
+    # Calculer le ratio sur l'ensemble des communes regroupées par statut administratif
+    total_immat_by_statut = data_merged.groupby('ADMI')['Nb_immat'].sum()
+    total_popu_by_statut = data_merged.groupby('ADMI')['POPU'].sum()
+    ratios_by_statut = (total_immat_by_statut / (total_popu_by_statut)) * (10 / 13) # 10 ans sur une période de 12 ans
+    # Renvoyer les résultats sous forme de séries
+    ratios_all_communes = data_merged['ratio']
+    ratios_by_statut = ratios_by_statut.rename('ratio').rename_axis('ADMI')
+
+    return ratios_all_communes, ratios_by_statut
+
+
+
+
 
 
 def get_tx_elec():
@@ -118,7 +123,11 @@ def fausse_pos(a, b, f, e):
 # print('test_repart_energie : ',
 #       test_repart_energie.loc['Diesel - thermique'] == 1013098)
 
-serie_ratio_com,serie_ratio_admi=repart_ratio()
+serie_ratio_com,serie_ratio_admi=repart_ratio(data_communes,data_immat)
+print(serie_ratio_admi)
+print('====')
+print(serie_ratio_com)
+print("MOYENNE",serie_ratio_com.mean())
 print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
 print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
 
