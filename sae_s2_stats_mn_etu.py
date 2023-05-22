@@ -79,6 +79,19 @@ def repart_ratio(data_communes, data_immat):
     ratios_all_communes = data_merged['ratio']
     ratios_by_statut = ratios_by_statut.rename('ratio').rename_axis('ADMI')
 
+
+    # Créer l'histogramme
+    plt.hist(data_merged['ratio'], bins=20,edgecolor='black', linewidth=1.2)
+
+    # Ajouter des labels et un titre
+    plt.xlabel('Ratio')
+    plt.ylabel('Population')
+    plt.title('Répartition des ratios d\'immatriculation par population')
+
+    # Afficher le graphique
+    plt.show()
+
+
     return ratios_all_communes, ratios_by_statut
 
 
@@ -87,7 +100,23 @@ def repart_ratio(data_communes, data_immat):
 
 
 def get_tx_elec():
-    return  # serie_tx
+    # Filtrer les années entre 2010 et 2022
+    filtered_data = data_immat[(data_immat['Annee'] >= 2010) & (data_immat['Annee'] <= 2022)]
+    # Créer un nouveau dataframe avec les colonnes 'Annee' et 'energie'
+    df = filtered_data[['Annee', 'energie', 'Nb_immat']]
+    # Compter le nombre d'immatriculations par année et énergie
+    counts = df.groupby(['Annee', 'energie'])['Nb_immat'].sum().reset_index()
+    # Calculer le nombre total d'immatriculations par année
+    total_counts = counts.groupby('Annee')['Nb_immat'].sum()
+    # Filtrer les lignes correspondant à l'énergie électrique et hydrogène
+    elec_hydro_counts = counts[counts['energie'].isin(['Electrique et hydrogene'])]
+    # Calculer le taux annuel des véhicules à énergie électrique et hydrogène
+    tx_elec = elec_hydro_counts.groupby('Annee')['Nb_immat'].sum() / total_counts
+    # Créer la série indexée par les années avec les taux annuels
+    tx_elec = tx_elec.rename('Taux annuel des véhicules électriques et hydrogène')
+
+    return tx_elec
+
 
 
 def mod_log_evol_tx_elec(tx_sat, x_mod_log, serie_tx_elec):
@@ -123,15 +152,18 @@ def fausse_pos(a, b, f, e):
 # print('test_repart_energie : ',
 #       test_repart_energie.loc['Diesel - thermique'] == 1013098)
 
-serie_ratio_com,serie_ratio_admi=repart_ratio(data_communes,data_immat)
-print(serie_ratio_admi)
-print('====')
-print(serie_ratio_com)
-print("MOYENNE",serie_ratio_com.mean())
-print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
-print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
+#PASS
+# serie_ratio_com,serie_ratio_admi=repart_ratio(data_communes,data_immat)
+# print(serie_ratio_admi)
+# print('====')
+# print(serie_ratio_com)
+# print("MOYENNE",serie_ratio_com.mean())
+# print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
+# print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
 
+#PASS
 # serie_tx_elec=get_tx_elec()
+# print(serie_tx_elec.mean())
 # print('test_get_tx_elec : ',np.isclose(serie_tx_elec.mean(),0.028857941346249236) and np.isclose(serie_tx_elec.loc[2020],0.0665604078072506))
 
 # serie_tx_elec_entree=pd.Series([0.010786,0.011784,0.014267,0.019319,0.066560],index=np.arange(2016,2021))
