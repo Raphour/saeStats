@@ -120,7 +120,24 @@ def get_tx_elec():
 
 
 def mod_log_evol_tx_elec(tx_sat, x_mod_log, serie_tx_elec):
-    return  # vecteur_mod_log
+    import numpy as np
+
+def mod_log_evol_tx_elec(tx_sat, x_mod_log, serie_tx_elec):
+    tx_estimates = np.zeros_like(x_mod_log)
+    a = 0
+
+    valid_indices = np.isin(x_mod_log, serie_tx_elec.index)
+    x_valid = x_mod_log[valid_indices]
+    y_valid = serie_tx_elec[x_valid]
+
+    if len(x_valid) > 1:
+        x_diff = x_valid - x_valid[0]
+        ln_tx = np.log(tx_sat / y_valid - 1)
+        a, _ = np.linalg.lstsq(np.vstack((x_diff, np.ones_like(x_diff))).T, ln_tx, rcond=None)[0]
+        tx_estimates[valid_indices] = 1 / (tx_sat + np.exp(a * x_diff))
+
+    return tx_estimates, a
+
 
 
 def mod_log_rec(u0, n, k, a):
@@ -152,7 +169,6 @@ def fausse_pos(a, b, f, e):
 # print('test_repart_energie : ',
 #       test_repart_energie.loc['Diesel - thermique'] == 1013098)
 
-#PASS
 # serie_ratio_com,serie_ratio_admi=repart_ratio(data_communes,data_immat)
 # print(serie_ratio_admi)
 # print('====')
@@ -161,14 +177,15 @@ def fausse_pos(a, b, f, e):
 # print('test_repart_ratio1 : ',np.isclose(serie_ratio_com.mean(),19.887652614523343))
 # print('test_repart_ratio2 : ',np.isclose(serie_ratio_admi.loc[3],34.55047603236587))
 
-#PASS
+
 # serie_tx_elec=get_tx_elec()
 # print(serie_tx_elec.mean())
 # print('test_get_tx_elec : ',np.isclose(serie_tx_elec.mean(),0.028857941346249236) and np.isclose(serie_tx_elec.loc[2020],0.0665604078072506))
 
-# serie_tx_elec_entree=pd.Series([0.010786,0.011784,0.014267,0.019319,0.066560],index=np.arange(2016,2021))
-# serie_tx_mod_log,a=mod_log_evol_tx_elec(0.8,np.linspace(2010,2050,100),serie_tx_elec_entree)
-# print('test mod_log_evol_tx_elec : ',np.isclose(serie_tx_mod_log.mean(),0.4658567447364723))
+serie_tx_elec_entree=pd.Series([0.010786,0.011784,0.014267,0.019319,0.066560],index=np.arange(2016,2021))
+serie_tx_mod_log,a=mod_log_evol_tx_elec(0.8,np.linspace(2010,2050,100),serie_tx_elec_entree)
+print(serie_tx_mod_log.mean())
+print('test mod_log_evol_tx_elec : ',np.isclose(serie_tx_mod_log.mean(),0.4658567447364723))
 
 # tx2010=8.224631848765294e-05
 # n2030=20
